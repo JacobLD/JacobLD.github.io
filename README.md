@@ -4,7 +4,7 @@
 
 ## Preview
 
-[![Creative Preview](https://startbootstrap.com/assets/img/screenshots/themes/creative.png)](https://blackrockdigital.github.io/startbootstrap-creative/)
+[![Creative Preview](https://jacobld.github.io/img/bg-masthead.jpg)](https://jacobld.github.io)
 
 **[View Live Preview](https://blackrockdigital.github.io/startbootstrap-creative/)**
 

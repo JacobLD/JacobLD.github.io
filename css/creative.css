@@ -10633,7 +10633,7 @@ hr.light {
 #recipeNav {
   -webkit-box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
   box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-  background-color: #fff;
+  background-color: #ff895b;
   -webkit-transition: background-color 0.2s ease;
   transition: background-color 0.2s ease;
 }
@@ -10703,7 +10703,7 @@ hr.light {
   #recipeNav {
     -webkit-box-shadow: none;
     box-shadow: none;
-    background-color: transparent;
+    background-color: #ff895b;
   }
   #recipeNav .navbar-brand {
     color: rgba(0, 0, 0, 0.7);
@@ -10724,7 +10724,7 @@ hr.light {
   #recipeNav.navbar-scrolled {
     -webkit-box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-    background-color: #fff;
+    background-color: #ff895b;
   }
   #recipeNav.navbar-scrolled .navbar-brand {
     color: #212529;
@@ -10838,4 +10838,31 @@ header.masthead h1 {
   margin-left: 3rem;
   margin-right: 5rem;
   width: 100%;
+}
+
+#ingredients .directions .notes {
+  font-family: "Merriweather Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+}
+
+
+#directions{
+  margin-top: 3rem;
+  margin-left: 3rem;
+  margin-bottom: 3rem;
+  margin-right: 2rem;
+}
+
+#notes{
+  margin-top: 3rem;
+  margin-bottom: 3rem;
+  margin-right: 2rem;
+}
+
+#recipeCopyright {
+  background-color: #ff895b;
+}
+
+#recipeImg {
+  margin-top: 3rem;
 }

@@ -1,0 +1,40 @@
+#recipeImg {
+    width: 100%;
+    height: 100%;
+  }
+  
+  #ingredients{
+    font-family: "Merriweather Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    margin-top: 10rem;
+    margin-left: 3rem;
+    margin-right: 5rem;
+    width: 100%;
+    font-size: 1.5rem;
+  }
+  
+  #ingredients .directions .notes {
+    font-family: "Merriweather Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  
+  }
+  
+  
+  #directions{
+    margin-top: 3rem;
+    margin-left: 3rem;
+    margin-bottom: 3rem;
+    margin-right: 2rem;
+  }
+  
+  #notes{
+    margin-top: 3rem;
+    margin-bottom: 3rem;
+    margin-right: 2rem;
+  }
+  
+  #recipeCopyright {
+    background-color: #ff895b;
+  }
+  
+  #recipeImg {
+    margin-top: 3rem;
+  }

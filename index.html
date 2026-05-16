@@ -1,0 +1,1905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mortgage Sweep Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Playfair+Display:wght@400;700;900&display=swap');
+
+  :root {
+    --bg:        #0d0f14;
+    --surface:   #13161e;
+    --surface2:  #1a1e2a;
+    --border:    #242838;
+    --accent:    #c8a96e;
+    --accent2:   #5b8fcc;
+    --accent3:   #6ec8a9;
+    --danger:    #c86e6e;
+    --text:      #e8e4dc;
+    --muted:     #6b7080;
+    --gold:      #d4aa60;
+
+    --c0: #5b8fcc;
+    --c1: #c8a96e;
+    --c2: #6ec8a9;
+    --c3: #c86e8f;
+    --c4: #a96ec8;
+    --c5: #6ec8c8;
+    --c6: #c8a06e;
+    --c7: #8fc86e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Noise texture overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  /* ── Header ── */
+  header {
+    position: relative;
+    z-index: 10;
+    padding: 32px 40px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    gap: 24px;
+    background: linear-gradient(180deg, rgba(200,169,110,0.04) 0%, transparent 100%);
+  }
+
+  .logo-mark {
+    width: 48px; height: 48px;
+    border: 2px solid var(--gold);
+    display: grid;
+    place-items: center;
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--gold);
+    flex-shrink: 0;
+  }
+
+  .header-text h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+
+  .header-text p {
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .header-stats {
+    margin-left: auto;
+    display: flex;
+    gap: 32px;
+    align-items: flex-end;
+  }
+
+  .hstat { text-align: right; }
+  .hstat-val {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--gold);
+  }
+  .hstat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  /* ── Layout ── */
+  .main { position: relative; z-index: 1; display: grid; grid-template-columns: 280px 1fr; height: calc(100vh - 97px); }
+
+  /* ── Sidebar ── */
+  aside {
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .sidebar-section {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-section h3 {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gold);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sidebar-section h3::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    padding: 20px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--gold);
+    background: rgba(212,170,96,0.05);
+  }
+  .drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+  .drop-zone-icon { font-size: 24px; margin-bottom: 8px; }
+  .drop-zone p { color: var(--muted); font-size: 11px; line-height: 1.5; }
+  .drop-zone em { color: var(--gold); font-style: normal; }
+
+  /* File list */
+  .file-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--surface2);
+    border-radius: 3px;
+    border-left: 3px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .file-item:hover { background: rgba(255,255,255,0.03); }
+  .file-item.active { border-left-color: var(--gold); }
+  .file-color { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .file-name { flex: 1; font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-count { font-size: 10px; color: var(--muted); }
+  .file-remove {
+    font-size: 14px; color: var(--muted); cursor: pointer; opacity: 0;
+    transition: opacity 0.15s; line-height: 1; background: none; border: none;
+    color: var(--danger);
+  }
+  .file-item:hover .file-remove { opacity: 1; }
+
+  /* Controls */
+  label.ctrl-label {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+
+  select, input[type=range] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 7px 10px;
+    border-radius: 3px;
+    outline: none;
+    appearance: none;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    margin-bottom: 12px;
+  }
+  select:focus, select:hover { border-color: var(--gold); }
+
+  input[type=range] {
+    padding: 0;
+    height: 4px;
+    background: var(--border);
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    accent-color: var(--gold);
+  }
+
+  .range-row { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: -8px; margin-bottom: 12px; }
+
+  /* Chart type buttons */
+  .chart-types { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chart-btn {
+    padding: 5px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+  }
+  .chart-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  .chart-btn.active { background: var(--gold); border-color: var(--gold); color: var(--bg); font-weight: 500; }
+
+  /* ── Main content ── */
+  .content {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Chart area — single panel */
+  .chart-area {
+    flex: 1;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .chart-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .chart-panel-header {
+    padding: 14px 20px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .chart-panel-header h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+  }
+
+  .chart-wrap {
+    flex: 1;
+    position: relative;
+    padding: 12px 16px 16px;
+    min-height: 0;
+  }
+
+  /* Table area */
+  .table-area {
+    height: 220px;
+    border-top: 1px solid var(--border);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .table-header {
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .table-header h3 {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gold);
+  }
+  .row-count { font-size: 11px; color: var(--muted); }
+
+  .table-scroll { overflow: auto; flex: 1; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  thead th {
+    position: sticky;
+    top: 0;
+    background: var(--surface2);
+    padding: 7px 12px;
+    text-align: right;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s;
+  }
+  thead th:hover { color: var(--gold); }
+  thead th:first-child { text-align: left; }
+  thead th.sort-asc::after { content: ' ↑'; color: var(--gold); }
+  thead th.sort-desc::after { content: ' ↓'; color: var(--gold); }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(36,40,56,0.5);
+    transition: background 0.1s;
+    cursor: pointer;
+  }
+  tbody tr:hover { background: rgba(212,170,96,0.04); }
+  tbody tr.highlighted { background: rgba(212,170,96,0.08); }
+  tbody td {
+    padding: 6px 12px;
+    text-align: right;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  tbody td:first-child { text-align: left; color: var(--muted); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 500;
+  }
+  .badge-green { background: rgba(110,200,169,0.15); color: var(--accent3); }
+  .badge-gold  { background: rgba(212,170,96,0.15);  color: var(--gold); }
+  .badge-blue  { background: rgba(91,143,204,0.15);  color: var(--accent2); }
+
+  /* ── Empty state ── */
+  .empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--muted);
+  }
+  .empty-state .big { font-size: 40px; opacity: 0.3; }
+  .empty-state p { font-size: 12px; text-align: center; line-height: 1.6; max-width: 220px; }
+  .empty-state em { color: var(--gold); font-style: normal; }
+
+  /* ── Tooltip ── */
+  .tooltip {
+    position: fixed;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-size: 11px;
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+    max-width: 220px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .tooltip-title { color: var(--gold); font-size: 12px; margin-bottom: 6px; }
+  .tooltip-row { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); }
+  .tooltip-row span:last-child { color: var(--text); }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  /* ── Animations ── */
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .chart-area { animation: fadeIn 0.3s ease both; }
+
+  /* ── Tabs ── */
+  .tab-bar {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: relative;
+    z-index: 5;
+    flex-shrink: 0;
+  }
+  .tab {
+    padding: 13px 28px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  .tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+  .tab-content.active { display: flex; }
+
+  /* ── Sweep Builder ── */
+  .sweep-page {
+    flex: 1;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+
+  .sweep-col {
+    padding: 28px 32px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .sweep-col:last-child { border-right: none; }
+
+  .sweep-section-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--gold);
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .field-row.two { grid-template-columns: 1fr 1fr; }
+
+  .field-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+
+  .field-sublabel {
+    font-size: 9px;
+    color: #444a5a;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 3px;
+  }
+
+  input[type=number], input[type=text] {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 7px 10px;
+    border-radius: 3px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input[type=number]:focus, input[type=text]:focus { border-color: var(--gold); }
+  input[type=number]::placeholder, input[type=text]::placeholder { color: #3a3f52; }
+
+  .sweep-param-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .sweep-param-block .param-name {
+    font-size: 11px;
+    color: var(--accent2);
+    font-weight: 500;
+    margin-bottom: 2px;
+  }
+
+  /* Filters list */
+  .filter-list { display: flex; flex-direction: column; gap: 8px; }
+  .filter-item {
+    display: grid;
+    grid-template-columns: 1fr 80px 100px 28px;
+    gap: 6px;
+    align-items: center;
+  }
+  .filter-item select, .filter-item input {
+    margin-bottom: 0;
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+  .filter-remove-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--danger);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 13px;
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .filter-remove-btn:hover { background: rgba(200,110,110,0.1); border-color: var(--danger); }
+
+  .add-filter-btn {
+    background: none;
+    border: 1px dashed var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+    letter-spacing: 0.05em;
+  }
+  .add-filter-btn:hover { border-color: var(--accent3); color: var(--accent3); }
+
+  /* Run button + output */
+  .run-section {
+    padding: 20px 32px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-shrink: 0;
+  }
+
+  .run-btn {
+    padding: 11px 32px;
+    background: var(--gold);
+    border: none;
+    color: var(--bg);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .run-btn:hover { background: #e8c070; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .run-status {
+    font-size: 11px;
+    color: var(--muted);
+    flex: 1;
+  }
+  .run-status.running { color: var(--accent2); }
+  .run-status.done    { color: var(--accent3); }
+  .run-status.error   { color: var(--danger); }
+
+  .progress-bar-wrap {
+    flex: 1;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    display: none;
+  }
+  .progress-bar-wrap.visible { display: block; }
+  .progress-bar {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.2s;
+  }
+
+  .download-btn {
+    padding: 9px 20px;
+    background: none;
+    border: 1px solid var(--accent3);
+    color: var(--accent3);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: none;
+    letter-spacing: 0.05em;
+  }
+  .download-btn.visible { display: block; }
+  .download-btn:hover { background: rgba(110,200,169,0.1); }
+
+  .json-preview {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 12px 14px;
+    font-size: 10px;
+    color: #5b7080;
+    white-space: pre;
+    overflow: auto;
+    max-height: 160px;
+    line-height: 1.6;
+    font-family: 'DM Mono', monospace;
+  }
+  .json-key   { color: var(--accent2); }
+  .json-str   { color: var(--accent3); }
+  .json-num   { color: var(--gold); }
+  .json-bool  { color: var(--danger); }
+  /* ── Help panel ── */
+  .help-trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: default;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    transition: all 0.15s;
+    position: relative;
+    user-select: none;
+    flex-shrink: 0;
+  }
+  .help-trigger:hover { border-color: var(--gold); color: var(--gold); }
+  .help-trigger .help-icon {
+    width: 18px; height: 18px;
+    border: 1.5px solid currentColor;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    line-height: 1;
+  }
+
+  .help-panel {
+    position: fixed;
+    top: 88px;
+    right: 24px;
+    width: 400px;
+    max-height: calc(100vh - 110px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(212,170,96,0.08);
+    z-index: 200;
+    overflow-y: auto;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+  .help-trigger:hover .help-panel,
+  .help-panel:hover {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateY(0);
+  }
+
+  .help-header {
+    padding: 20px 24px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .help-header h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    color: var(--text);
+  }
+  .help-header span {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .help-body { padding: 20px 24px 24px; display: flex; flex-direction: column; gap: 20px; }
+
+  .help-section h4 {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gold);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .help-section h4::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .help-section p, .help-section li {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.75;
+  }
+  .help-section ul { padding-left: 14px; display: flex; flex-direction: column; gap: 3px; }
+  .help-section li::marker { color: var(--gold); }
+  .help-section strong { color: var(--text); font-weight: 500; }
+  .help-section code {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 1px 5px;
+    font-size: 10px;
+    color: var(--accent3);
+    font-family: 'DM Mono', monospace;
+  }
+
+  .help-step {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .help-step-num {
+    width: 22px; height: 22px;
+    border: 1.5px solid var(--gold);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    color: var(--gold);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .help-step-text { font-size: 11px; color: var(--muted); line-height: 1.7; }
+  .help-step-text strong { color: var(--text); }
+
+  .help-pill {
+    display: inline-block;
+    padding: 1px 7px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 10px;
+    color: var(--accent2);
+    margin: 0 1px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">M</div>
+  <div class="header-text">
+    <h1>Mortgage Sweep Dashboard</h1>
+    <p>Parameter sweep analysis &amp; comparison</p>
+  </div>
+  <div class="header-stats">
+    <div class="hstat">
+      <div class="hstat-val" id="stat-files">0</div>
+      <div class="hstat-label">Files loaded</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-val" id="stat-rows">—</div>
+      <div class="hstat-label">Total rows</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-val" id="stat-best">—</div>
+      <div class="hstat-label">Best total cost</div>
+    </div>
+  </div>
+
+  <!-- Help trigger -->
+  <div class="help-trigger">
+    <div class="help-icon">?</div>
+    How to use
+
+    <div class="help-panel">
+      <div class="help-header">
+        <h2>Mortgage Sweep Dashboard</h2>
+        <span>User Guide</span>
+      </div>
+      <div class="help-body">
+
+        <div class="help-section">
+          <h4>Overview</h4>
+          <p>This tool runs parameter sweeps across mortgage scenarios — varying points paid, down payment, and target monthly payment — and lets you visualize the tradeoffs. There are two tabs: <strong>Analysis</strong> for charting loaded CSVs, and <strong>Run Sweep</strong> to generate new results directly in the browser.</p>
+        </div>
+
+        <div class="help-section">
+          <h4>Quick Start</h4>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div class="help-step">
+              <div class="help-step-num">1</div>
+              <div class="help-step-text">Click <strong>Run Sweep</strong> tab. Set your purchase price and loan constants, then define start / stop / step ranges for each parameter.</div>
+            </div>
+            <div class="help-step">
+              <div class="help-step-num">2</div>
+              <div class="help-step-text">Add filters to narrow results — e.g. <code>funds_needed lt 60000</code> to only see scenarios where cash-to-close is under $60k.</div>
+            </div>
+            <div class="help-step">
+              <div class="help-step-num">3</div>
+              <div class="help-step-text">Click <strong>▶ Run Sweep</strong>. The engine runs in your browser — no server needed. Progress bar tracks completion.</div>
+            </div>
+            <div class="help-step">
+              <div class="help-step-num">4</div>
+              <div class="help-step-text">Click <strong>→ Load into Analysis</strong> to chart the results immediately, or <strong>⬇ Download CSV</strong> to save the file (named <code>sweep_&lt;price&gt;_&lt;uuid&gt;.csv</code>).</div>
+            </div>
+            <div class="help-step">
+              <div class="help-step-num">5</div>
+              <div class="help-step-text">In the <strong>Analysis</strong> tab, pick X axis, Y axis, and Color By to explore the data. Click any point to highlight its row in the table below.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <h4>Sweep Parameters</h4>
+          <ul>
+            <li><strong>Points % of Loan</strong> — enter whole numbers. <code>-1</code> = 1% lender credit (reduces closing costs, raises rate). <code>2</code> = 2 points paid (reduces rate, increases closing costs). Range is divided by 100 automatically.</li>
+            <li><strong>Down Payment %</strong> — whole number percentage of purchase price. <code>10</code> = 10% down. PMI applies below 20%.</li>
+            <li><strong>Target Monthly Payment</strong> — total you want to pay each month. Extra above the base payment (P&amp;I + escrows + PMI) goes to principal. When PMI drops off, that savings automatically becomes extra principal to keep you at your target.</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h4>Filters</h4>
+          <ul>
+            <li>Filters apply to any output field. Supported operators: <code>lt</code> <code>le</code> <code>gt</code> <code>ge</code> <code>eq</code> <code>ne</code></li>
+            <li>All filters must pass for a row to appear in results.</li>
+            <li>Common filters: <code>funds_needed lt 60000</code> · <code>payoff_years lt 20</code> · <code>pmi_dropoff_month lt 48</code></li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h4>Loading External CSVs</h4>
+          <p>Drop any <code>sweep_results.csv</code> produced by <code>mortgage_sweep.py</code> into the sidebar on the Analysis tab. Multiple files load side by side — each gets its own color. Use <span class="help-pill">Color By → CSV File</span> to compare runs.</p>
+        </div>
+
+        <div class="help-section">
+          <h4>Key Output Fields</h4>
+          <ul>
+            <li><strong>total_cost</strong> — total interest paid over loan life + points cost. The truest apples-to-apples comparison.</li>
+            <li><strong>funds_needed</strong> — cash needed at closing: down payment + closing costs + prepaids − earnest money.</li>
+            <li><strong>pmi_dropoff_month</strong> — month when balance falls below your LTV threshold and PMI cancels.</li>
+            <li><strong>payoff_years</strong> — how long until the loan is fully paid off, accounting for extra payments.</li>
+            <li><strong>start_payment</strong> — total month-1 payment including PMI and any extra.</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+  <!-- Sidebar -->
+  <aside>
+    <div class="sidebar-section">
+      <h3>Data Sources</h3>
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="file-input" accept=".csv" multiple>
+        <div class="drop-zone-icon">⊕</div>
+        <p>Drop <em>sweep_results.csv</em> files here<br>or click to browse</p>
+      </div>
+      <div class="file-list" id="file-list"></div>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Chart Configuration</h3>
+
+      <label class="ctrl-label">X Axis</label>
+      <select id="x-axis">
+        <option value="points_pct">Points %</option>
+        <option value="down_pct">Down Payment %</option>
+        <option value="target_payment">Target Payment</option>
+        <option value="rate_pct">Rate %</option>
+        <option value="payoff_years" selected>Payoff Years</option>
+        <option value="funds_needed">Funds Needed</option>
+        <option value="pmi_dropoff_month">PMI Dropoff Month</option>
+      </select>
+
+      <label class="ctrl-label">Y Axis</label>
+      <select id="y-axis">
+        <option value="total_cost">Total Lifetime Cost</option>
+        <option value="total_interest">Total Interest</option>
+        <option value="funds_needed">Funds Needed</option>
+        <option value="start_payment">Starting Payment</option>
+        <option value="payoff_years">Payoff Years</option>
+        <option value="pmi_dropoff_month">PMI Dropoff Month</option>
+        <option value="total_closing">Total Closing</option>
+        <option value="total_pmi">Total PMI Paid</option>
+      </select>
+
+      <label class="ctrl-label">Color By</label>
+      <select id="color-by">
+        <option value="file">CSV File</option>
+        <option value="down_pct">Down Payment %</option>
+        <option value="points_pct">Points %</option>
+        <option value="target_payment">Target Payment</option>
+        <option value="rate_pct">Rate %</option>
+      </select>
+
+      <label class="ctrl-label">Chart Type</label>
+      <div class="chart-types">
+        <button class="chart-btn active" data-type="scatter">Scatter</button>
+        <button class="chart-btn" data-type="line">Line</button>
+        <button class="chart-btn" data-type="bar">Bar</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Filter</h3>
+
+      <label class="ctrl-label">Max Funds Needed: <span id="funds-label">any</span></label>
+      <input type="range" id="filter-funds" min="0" max="200000" step="5000" value="200000">
+      <div class="range-row"><span>$0</span><span>$200k</span></div>
+
+      <label class="ctrl-label">Max Total Cost: <span id="cost-label">any</span></label>
+      <input type="range" id="filter-cost" min="0" max="600000" step="10000" value="600000">
+      <div class="range-row"><span>$0</span><span>$600k</span></div>
+
+      <label class="ctrl-label">Max Payoff Years: <span id="payoff-label">any</span></label>
+      <input type="range" id="filter-payoff" min="5" max="30" step="1" value="30">
+      <div class="range-row"><span>5yr</span><span>30yr</span></div>
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <div class="content">
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <div class="tab active" data-tab="analysis">Analysis</div>
+      <div class="tab" data-tab="sweep">Run Sweep</div>
+    </div>
+
+    <!-- Tab: Analysis -->
+    <div class="tab-content active" id="tab-analysis">
+      <div class="chart-area" id="chart-area">
+        <div class="chart-panel">
+          <div class="empty-state">
+            <div class="big">⊕</div>
+            <p>Drop your <em>sweep_results.csv</em> files into the sidebar to begin.<br>Multiple files can be compared simultaneously.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-area">
+        <div class="table-header">
+          <h3>Result Table</h3>
+          <span class="row-count" id="row-count">No data</span>
+          <span style="margin-left:auto;font-size:10px;color:var(--muted)">Click header to sort · Click row to highlight</span>
+        </div>
+        <div class="table-scroll">
+          <table id="data-table">
+            <thead id="table-head"></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Sweep Builder -->
+    <div class="tab-content" id="tab-sweep">
+      <div class="sweep-page">
+
+        <!-- Left col: params -->
+        <div class="sweep-col">
+          <div class="sweep-section-title">Property &amp; Loan Constants</div>
+
+          <div class="field-group">
+            <div class="field-label">Purchase Price ($)</div>
+            <input type="number" id="sw-purchase" value="369900" min="50000" step="1000">
+          </div>
+          <div class="field-row two">
+            <div>
+              <div class="field-label">Par Rate (0-pt rate)</div>
+              <input type="number" id="sw-par-rate" value="6.573" step="0.001" min="1" max="20">
+            </div>
+            <div>
+              <div class="field-label">Cost per 1% Rate ($)</div>
+              <input type="number" id="sw-cost-per-pct" value="14000" step="500" min="0">
+            </div>
+          </div>
+          <div class="field-row two">
+            <div>
+              <div class="field-label">PMI Drop-off LTV (%)</div>
+              <input type="number" id="sw-pmi-ltv" value="80" step="1" min="50" max="99">
+            </div>
+            <div>
+              <div class="field-label">PMI Monthly ($)</div>
+              <input type="number" id="sw-pmi-monthly" value="102" step="1" min="0">
+            </div>
+          </div>
+
+          <div class="sweep-section-title" style="margin-top:8px">Sweep Parameters</div>
+          <p style="font-size:10px;color:var(--muted);line-height:1.7">Define start / stop / step for each axis — or enter a single value to hold it fixed.</p>
+
+          <!-- Points sweep -->
+          <div class="sweep-param-block">
+            <div class="param-name">Points % of Loan</div>
+            <p style="font-size:10px;color:var(--muted);line-height:1.6;margin-bottom:2px">Enter whole numbers — e.g. <span style="color:var(--gold)">-1</span> = 1% lender credit, <span style="color:var(--gold)">2</span> = 2 points paid. Values are divided by 100 before calculation.</p>
+            <div class="field-row">
+              <div>
+                <div class="field-sublabel">Start</div>
+                <input type="number" id="sw-pts-start" value="-1" step="0.1">
+              </div>
+              <div>
+                <div class="field-sublabel">Stop</div>
+                <input type="number" id="sw-pts-stop" value="2" step="0.1">
+              </div>
+              <div>
+                <div class="field-sublabel">Step</div>
+                <input type="number" id="sw-pts-step" value="0.5" step="0.1" min="0.01">
+              </div>
+            </div>
+          </div>
+
+          <!-- Down payment sweep -->
+          <div class="sweep-param-block">
+            <div class="param-name">Down Payment %</div>
+            <div class="field-row">
+              <div>
+                <div class="field-sublabel">Start</div>
+                <input type="number" id="sw-down-start" value="5" step="1" min="0">
+              </div>
+              <div>
+                <div class="field-sublabel">Stop</div>
+                <input type="number" id="sw-down-stop" value="25" step="1" min="0">
+              </div>
+              <div>
+                <div class="field-sublabel">Step</div>
+                <input type="number" id="sw-down-step" value="5" step="1" min="0.1">
+              </div>
+            </div>
+          </div>
+
+          <!-- Target payment sweep -->
+          <div class="sweep-param-block">
+            <div class="param-name">Target Monthly Payment ($)</div>
+            <div class="field-row">
+              <div>
+                <div class="field-sublabel">Start</div>
+                <input type="number" id="sw-tgt-start" value="0" step="100" min="0">
+              </div>
+              <div>
+                <div class="field-sublabel">Stop</div>
+                <input type="number" id="sw-tgt-stop" value="3500" step="100" min="0">
+              </div>
+              <div>
+                <div class="field-sublabel">Step</div>
+                <input type="number" id="sw-tgt-step" value="500" step="100" min="100">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right col: filters + preview -->
+        <div class="sweep-col">
+          <div class="sweep-section-title">Output Filters</div>
+          <p style="font-size:10px;color:var(--muted);line-height:1.7">Only rows matching all filters will appear in the CSV. Operators: lt &lt; le ≤ gt &gt; ge ≥ eq = ne ≠</p>
+
+          <div class="filter-list" id="sw-filter-list"></div>
+          <button class="add-filter-btn" id="sw-add-filter">+ Add Filter</button>
+
+          <div class="sweep-section-title" style="margin-top:8px">Config Preview</div>
+          <div class="json-preview" id="sw-json-preview">{ }</div>
+
+          <div class="sweep-section-title" style="margin-top:4px">Sweep Summary</div>
+          <div id="sw-summary" style="font-size:11px;color:var(--muted);line-height:1.8">
+            Configure parameters above to see combination count.
+          </div>
+        </div>
+      </div>
+
+      <!-- Run bar -->
+      <div class="run-section">
+        <button class="run-btn" id="sw-run-btn">▶ Run Sweep</button>
+        <div class="progress-bar-wrap" id="sw-progress-wrap">
+          <div class="progress-bar" id="sw-progress-bar"></div>
+        </div>
+        <div class="run-status" id="sw-status">Ready — configure parameters and click Run.</div>
+        <button class="download-btn" id="sw-download-btn">⬇ Download CSV</button>
+        <button class="download-btn" id="sw-load-btn" style="border-color:var(--accent2);color:var(--accent2);">→ Load into Analysis</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const STATE = {
+  files: [],       // { name, rows, color }
+  filtered: [],    // merged filtered rows
+  charts: [],      // Chart.js instances
+  sortCol: 'total_cost',
+  sortDir: 'asc',
+  chartType: 'scatter',
+  highlightRow: null,
+};
+
+const FILE_COLORS = ['var(--c0)','var(--c1)','var(--c2)','var(--c3)','var(--c4)','var(--c5)','var(--c6)','var(--c7)'];
+const FILE_COLORS_HEX = ['#5b8fcc','#c8a96e','#6ec8a9','#c86e8f','#a96ec8','#6ec8c8','#c8a06e','#8fc86e'];
+
+const LABELS = {
+  points_pct:       'Points %',
+  down_pct:         'Down %',
+  target_payment:   'Target Pmt',
+  purchase_price:   'Purchase',
+  rate_pct:         'Rate %',
+  loan_amount:      'Loan Amt',
+  pi_payment:       'P&I Pmt',
+  start_payment:    'Start Pmt',
+  post_pmi_payment: 'Post-PMI Pmt',
+  pmi_dropoff_month:'PMI Off Mo.',
+  payoff_month:     'Payoff Mo.',
+  payoff_years:     'Payoff Yrs',
+  total_interest:   'Total Interest',
+  total_pmi:        'Total PMI',
+  total_cost:       'Total Cost',
+  points_dollar:    'Points $',
+  total_closing:    'Total Closing',
+  prepaids:         'Prepaids',
+  funds_needed:     'Funds Needed',
+  down_dollar:      'Down $',
+};
+
+const CURRENCY_FIELDS = new Set(['loan_amount','pi_payment','start_payment','post_pmi_payment',
+  'total_interest','total_pmi','total_cost','points_dollar','total_closing','prepaids',
+  'funds_needed','down_dollar','purchase_price','target_payment']);
+const PCT_FIELDS = new Set(['points_pct','down_pct','rate_pct']);
+
+function fmt(val, field) {
+  if (val === null || val === undefined || val === '') return '—';
+  const n = parseFloat(val);
+  if (isNaN(n)) return val;
+  if (CURRENCY_FIELDS.has(field)) return '$' + n.toLocaleString('en-US', {minimumFractionDigits:0,maximumFractionDigits:0});
+  if (PCT_FIELDS.has(field)) return (n * (field === 'rate_pct' ? 1 : 100)).toFixed(field==='rate_pct'?3:1) + '%';
+  if (field === 'payoff_years') return n.toFixed(1) + 'yr';
+  return n.toLocaleString('en-US', {maximumFractionDigits:2});
+}
+
+// ── CSV parser ─────────────────────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim());
+  return lines.slice(1).map(line => {
+    const vals = line.split(',');
+    const row = {};
+    headers.forEach((h, i) => {
+      const v = (vals[i] || '').trim();
+      row[h] = isNaN(v) || v === '' ? v : parseFloat(v);
+    });
+    return row;
+  });
+}
+
+// ── File loading ───────────────────────────────────────────────────────────
+function loadFile(file) {
+  if (STATE.files.find(f => f.name === file.name)) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const rows = parseCSV(e.target.result);
+    const idx  = STATE.files.length;
+    STATE.files.push({ name: file.name, rows, color: FILE_COLORS_HEX[idx % FILE_COLORS_HEX.length] });
+    renderFileList();
+    applyFilters();
+    updateHeaderStats();
+  };
+  reader.readAsText(file);
+}
+
+function removeFile(name) {
+  STATE.files = STATE.files.filter(f => f.name !== name);
+  renderFileList();
+  applyFilters();
+  updateHeaderStats();
+}
+
+// ── File list UI ───────────────────────────────────────────────────────────
+function renderFileList() {
+  const el = document.getElementById('file-list');
+  el.innerHTML = '';
+  STATE.files.forEach((f, i) => {
+    const item = document.createElement('div');
+    item.className = 'file-item active';
+    item.innerHTML = `
+      <div class="file-color" style="background:${f.color}"></div>
+      <div class="file-name" title="${f.name}">${f.name}</div>
+      <div class="file-count">${f.rows.length}</div>
+      <button class="file-remove" title="Remove">✕</button>
+    `;
+    item.querySelector('.file-remove').addEventListener('click', e => {
+      e.stopPropagation();
+      removeFile(f.name);
+    });
+    el.appendChild(item);
+  });
+  document.getElementById('stat-files').textContent = STATE.files.length;
+}
+
+// ── Filters ────────────────────────────────────────────────────────────────
+function applyFilters() {
+  const maxFunds  = parseFloat(document.getElementById('filter-funds').value);
+  const maxCost   = parseFloat(document.getElementById('filter-cost').value);
+  const maxPayoff = parseFloat(document.getElementById('filter-payoff').value);
+
+  STATE.filtered = [];
+  STATE.files.forEach(f => {
+    f.rows.forEach(row => {
+      if (row.funds_needed > maxFunds) return;
+      if (row.total_cost   > maxCost)  return;
+      if (row.payoff_years > maxPayoff) return;
+      STATE.filtered.push({ ...row, _file: f.name, _color: f.color });
+    });
+  });
+
+  renderCharts();
+  renderTable();
+}
+
+// ── Update header stats ────────────────────────────────────────────────────
+function updateHeaderStats() {
+  const allRows = STATE.files.flatMap(f => f.rows);
+  document.getElementById('stat-rows').textContent = allRows.length.toLocaleString();
+  if (allRows.length) {
+    const best = Math.min(...allRows.map(r => r.total_cost));
+    document.getElementById('stat-best').textContent = '$' + Math.round(best).toLocaleString();
+  } else {
+    document.getElementById('stat-rows').textContent = '—';
+    document.getElementById('stat-best').textContent = '—';
+  }
+}
+
+// ── Charts ─────────────────────────────────────────────────────────────────
+// ── Dataset builder ────────────────────────────────────────────────────────
+function buildDatasets(xKey, yKey, colorBy) {
+  if (!STATE.filtered.length) return [];
+
+  if (colorBy === 'file') {
+    const byFile = {};
+    STATE.filtered.forEach(row => {
+      if (!byFile[row._file]) byFile[row._file] = { label: row._file, color: row._color, data: [] };
+      const x = row[xKey], y = row[yKey];
+      if (x !== undefined && y !== undefined) byFile[row._file].data.push({ x, y, _row: row });
+    });
+    return Object.values(byFile).map(g => makeDataset(g.label, g.data, g.color));
+  }
+
+  const buckets = {};
+  const uniqueVals = [...new Set(STATE.filtered.map(r => r[colorBy]))].sort((a,b)=>a-b);
+  uniqueVals.forEach((v, i) => {
+    buckets[v] = { label: `${LABELS[colorBy]||colorBy}=${fmt(v,colorBy)}`, color: FILE_COLORS_HEX[i % FILE_COLORS_HEX.length], data: [] };
+  });
+  STATE.filtered.forEach(row => {
+    const v = row[colorBy];
+    if (buckets[v]) {
+      const x = row[xKey], y = row[yKey];
+      if (x !== undefined && y !== undefined) buckets[v].data.push({ x, y, _row: row });
+    }
+  });
+  return Object.values(buckets).map(g => makeDataset(g.label, g.data, g.color));
+}
+
+function makeDataset(label, data, color) {
+  const type = STATE.chartType;
+  const hex = color.startsWith('#') ? color : '#5b8fcc';
+  return {
+    label,
+    data,
+    backgroundColor: hex + 'cc',
+    borderColor: hex,
+    borderWidth: type === 'line' ? 2 : 1,
+    pointRadius: type === 'scatter' ? 4 : 3,
+    pointHoverRadius: 7,
+    fill: false,
+    tension: 0.3,
+    parsing: false,
+  };
+}
+
+function renderCharts() {
+  const area    = document.getElementById('chart-area');
+  const xKey    = document.getElementById('x-axis').value;
+  const yKey    = document.getElementById('y-axis').value;
+  const colorBy = document.getElementById('color-by').value;
+
+  STATE.charts.forEach(c => c.destroy());
+  STATE.charts = [];
+
+  if (!STATE.filtered.length) {
+    area.innerHTML = `<div class="chart-panel"><div class="empty-state"><div class="big">⊕</div><p>Drop your <em>sweep_results.csv</em> files into the sidebar to begin.</p></div></div>`;
+    return;
+  }
+
+  area.innerHTML = `
+    <div class="chart-panel">
+      <div class="chart-panel-header">
+        <h4>${LABELS[yKey]||yKey} &nbsp;vs&nbsp; ${LABELS[xKey]||xKey}</h4>
+        <span style="font-size:10px;color:var(--muted)">${STATE.filtered.length.toLocaleString()} points &nbsp;·&nbsp; colored by ${LABELS[colorBy]||colorBy}</span>
+      </div>
+      <div class="chart-wrap"><canvas id="main-chart"></canvas></div>
+    </div>
+  `;
+
+  const datasets = buildDatasets(xKey, yKey, colorBy);
+  const type = STATE.chartType === 'scatter' ? 'scatter' : STATE.chartType;
+
+  const ch = new Chart(document.getElementById('main-chart'), {
+    type,
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 250 },
+      plugins: {
+        legend: {
+          labels: {
+            color: '#6b7080',
+            font: { family: 'DM Mono', size: 11 },
+            boxWidth: 10, boxHeight: 10, padding: 16,
+          }
+        },
+        tooltip: { enabled: false, external: externalTooltip },
+      },
+      scales: {
+        x: {
+          type: type === 'bar' ? 'category' : 'linear',
+          ticks: { color: '#6b7080', font: { family: 'DM Mono', size: 11 }, maxTicksLimit: 10 },
+          grid: { color: 'rgba(36,40,56,0.8)' },
+          title: { display: true, text: LABELS[xKey]||xKey, color: '#9099aa', font: { family: 'DM Mono', size: 11 } },
+        },
+        y: {
+          ticks: {
+            color: '#6b7080',
+            font: { family: 'DM Mono', size: 11 },
+            maxTicksLimit: 8,
+            callback: v => CURRENCY_FIELDS.has(yKey) ? '$' + Math.round(v).toLocaleString() : v.toFixed(1),
+          },
+          grid: { color: 'rgba(36,40,56,0.8)' },
+          title: { display: true, text: LABELS[yKey]||yKey, color: '#9099aa', font: { family: 'DM Mono', size: 11 } },
+        },
+      },
+      onClick: (e, elements) => {
+        if (!elements.length) return;
+        const el = elements[0];
+        const row = ch.data.datasets[el.datasetIndex].data[el.index]._row;
+        highlightRow(row);
+      },
+    },
+  });
+  STATE.charts.push(ch);
+}
+
+// ── External tooltip ───────────────────────────────────────────────────────
+function externalTooltip(context) {
+  const tip = document.getElementById('tooltip');
+  if (context.tooltip.opacity === 0) { tip.style.display = 'none'; return; }
+
+  const item = context.tooltip.dataPoints[0];
+  if (!item || !item.raw._row) return;
+  const row = item.raw._row;
+
+  const showFields = ['rate_pct','down_pct','points_pct','target_payment','total_cost','funds_needed','payoff_years','pmi_dropoff_month','start_payment'];
+  tip.innerHTML = `
+    <div class="tooltip-title">${item.dataset.label}</div>
+    ${showFields.map(f => `<div class="tooltip-row"><span>${LABELS[f]||f}</span><span>${fmt(row[f],f)}</span></div>`).join('')}
+  `;
+  tip.style.display = 'block';
+  const x = context.chart.canvas.getBoundingClientRect().left + item.element.x + 12;
+  const y = context.chart.canvas.getBoundingClientRect().top  + item.element.y - 20;
+  tip.style.left = Math.min(x, window.innerWidth - 240) + 'px';
+  tip.style.top  = Math.max(y, 10) + 'px';
+}
+
+// ── Table ──────────────────────────────────────────────────────────────────
+const TABLE_COLS = ['_file','points_pct','down_pct','target_payment','rate_pct',
+  'start_payment','pmi_dropoff_month','payoff_years','total_cost','funds_needed','total_interest','total_closing'];
+
+function renderTable() {
+  const head = document.getElementById('table-head');
+  const body = document.getElementById('table-body');
+  const count = document.getElementById('row-count');
+
+  count.textContent = `${STATE.filtered.length.toLocaleString()} rows`;
+
+  head.innerHTML = '<tr>' + TABLE_COLS.map(col => {
+    const sc = STATE.sortCol === col ? ` sort-${STATE.sortDir}` : '';
+    const lbl = col === '_file' ? 'File' : (LABELS[col] || col);
+    return `<th class="${sc}" data-col="${col}">${lbl}</th>`;
+  }).join('') + '</tr>';
+
+  head.querySelectorAll('th').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (STATE.sortCol === col) STATE.sortDir = STATE.sortDir === 'asc' ? 'desc' : 'asc';
+      else { STATE.sortCol = col; STATE.sortDir = 'asc'; }
+      renderTable();
+    });
+  });
+
+  const sorted = [...STATE.filtered].sort((a, b) => {
+    const av = a[STATE.sortCol], bv = b[STATE.sortCol];
+    if (typeof av === 'number') return STATE.sortDir === 'asc' ? av - bv : bv - av;
+    return STATE.sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+  });
+
+  body.innerHTML = sorted.slice(0, 500).map((row, i) => {
+    const cells = TABLE_COLS.map(col => {
+      if (col === '_file') return `<td><span style="color:${row._color}">${row._file.replace('.csv','')}</span></td>`;
+      return `<td>${fmt(row[col], col)}</td>`;
+    }).join('');
+    return `<tr data-idx="${i}">${cells}</tr>`;
+  }).join('');
+
+  body.querySelectorAll('tr').forEach(tr => {
+    tr.addEventListener('click', () => {
+      body.querySelectorAll('tr').forEach(r => r.classList.remove('highlighted'));
+      tr.classList.add('highlighted');
+    });
+  });
+}
+
+function highlightRow(targetRow) {
+  const body = document.getElementById('table-body');
+  const rows = body.querySelectorAll('tr');
+  rows.forEach(tr => tr.classList.remove('highlighted'));
+  // Find matching row in table and scroll to it
+  const sorted = [...STATE.filtered].sort((a, b) => {
+    const av = a[STATE.sortCol], bv = b[STATE.sortCol];
+    if (typeof av === 'number') return STATE.sortDir === 'asc' ? av - bv : bv - av;
+    return STATE.sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+  });
+  const idx = sorted.findIndex(r => r === targetRow || (r.total_cost === targetRow.total_cost && r.funds_needed === targetRow.funds_needed));
+  if (idx >= 0 && rows[idx]) {
+    rows[idx].classList.add('highlighted');
+    rows[idx].scrollIntoView({ block: 'nearest' });
+  }
+}
+
+// ── Filter range labels ────────────────────────────────────────────────────
+document.getElementById('filter-funds').addEventListener('input', function() {
+  const v = parseInt(this.value);
+  document.getElementById('funds-label').textContent = v >= 200000 ? 'any' : '$'+v.toLocaleString();
+  applyFilters();
+});
+document.getElementById('filter-cost').addEventListener('input', function() {
+  const v = parseInt(this.value);
+  document.getElementById('cost-label').textContent = v >= 600000 ? 'any' : '$'+v.toLocaleString();
+  applyFilters();
+});
+document.getElementById('filter-payoff').addEventListener('input', function() {
+  const v = parseInt(this.value);
+  document.getElementById('payoff-label').textContent = v >= 30 ? 'any' : v+'yr';
+  applyFilters();
+});
+
+// ── Axis / chart type controls ─────────────────────────────────────────────
+['x-axis','y-axis','color-by'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => renderCharts());
+});
+
+document.querySelectorAll('.chart-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.chart-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    STATE.chartType = this.dataset.type;
+    renderCharts();
+  });
+});
+
+// ── Drag & drop ────────────────────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  [...e.dataTransfer.files].forEach(loadFile);
+});
+fileInput.addEventListener('change', () => {
+  [...fileInput.files].forEach(loadFile);
+  fileInput.value = '';
+});
+
+// Hide tooltip on mouse move outside charts
+document.addEventListener('mousemove', e => {
+  const tip = document.getElementById('tooltip');
+  if (!e.target.closest('canvas')) tip.style.display = 'none';
+});
+
+// ── Tab switching ──────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'sweep') { updateSweepPreview(); }
+  });
+});
+
+// ── Sweep engine (ported from mortgage_sweep.py) ───────────────────────────
+const SWEEP = {
+  PAR_RATE:      0.06573,
+  COST_PER_1PCT: 14000,
+  PMI_LTV:       0.80,
+  PMI_MONTHLY:   102,
+  TERM:          360,
+  APPRAISAL:     525,
+  CREDIT_FLOOD:  180,
+  CLOSING_TITLE: 975,
+  RECORDING:     60,
+  MISC:          0,
+  UNDERWRITING:  975,
+  PREPAID_INT:   58,
+  FIRST_YR_INS:  1560,
+  TAX_ESCROW_MO: 515,
+  INS_ESCROW_MO: 130,
+  EARNEST_PCT:   0.01,
+};
+
+function sweepDeriveRate(purchase, downPct, pointsPct, costPer1pct, parRate) {
+  const loan = purchase * (1 - downPct);
+  return Math.max(parRate - pointsPct * (0.01 / (costPer1pct / loan)), 0.001);
+}
+
+function sweepPMT(rateAnnual, loan) {
+  const r = rateAnnual / 12;
+  return loan * r / (1 - Math.pow(1 + r, -SWEEP.TERM));
+}
+
+function sweepAmortize(purchase, downPct, pointsPct, targetPayment, cfg) {
+  const loan      = purchase * (1 - downPct);
+  const rate      = sweepDeriveRate(purchase, downPct, pointsPct, cfg.costPer1pct, cfg.parRate);
+  const piPmt     = sweepPMT(rate, loan);
+  const pmiLTV    = cfg.pmiLTV;
+  const pmiMo     = cfg.pmiMonthly;
+
+  let balance = loan, totalInterest = 0, totalPMI = 0;
+  let pmiDropoff = null, payoffMonth = SWEEP.TERM;
+
+  for (let m = 1; m <= SWEEP.TERM; m++) {
+    if (balance <= 0) { payoffMonth = m - 1; break; }
+    const interest = balance * (rate / 12);
+    const pmiThis  = balance > purchase * pmiLTV ? pmiMo : 0;
+    if (pmiThis === 0 && pmiDropoff === null) pmiDropoff = m;
+    const extra    = targetPayment > 0
+      ? Math.max(0, targetPayment - (piPmt + SWEEP.TAX_ESCROW_MO + SWEEP.INS_ESCROW_MO + pmiThis))
+      : 0;
+    const principal = Math.max(piPmt - interest, 0);
+    const applied   = Math.min(extra + pmiThis, Math.max(balance - principal, 0));
+    balance -= (principal + applied);
+    balance  = Math.max(balance, 0);
+    totalInterest += interest;
+    totalPMI      += pmiThis;
+    if (balance <= 0) { payoffMonth = m; break; }
+  }
+
+  const pointsDollar = pointsPct * loan;
+  const totalClosing = SWEEP.APPRAISAL + SWEEP.CREDIT_FLOOD + SWEEP.CLOSING_TITLE +
+    SWEEP.RECORDING + SWEEP.MISC + SWEEP.UNDERWRITING + pointsDollar;
+  const prepaids   = SWEEP.PREPAID_INT + (SWEEP.TAX_ESCROW_MO + SWEEP.INS_ESCROW_MO) * 2 + SWEEP.FIRST_YR_INS;
+  const downDollar = purchase * downPct;
+  const fundsNeeded = downDollar + totalClosing + prepaids - purchase * SWEEP.EARNEST_PCT;
+  const startPmt   = piPmt + SWEEP.TAX_ESCROW_MO + SWEEP.INS_ESCROW_MO + pmiMo;
+
+  return {
+    points_pct:        +pointsPct.toFixed(4),
+    down_pct:          +downPct.toFixed(4),
+    target_payment:    +targetPayment.toFixed(2),
+    purchase_price:    purchase,
+    rate_pct:          +(rate * 100).toFixed(4),
+    loan_amount:       +loan.toFixed(2),
+    pi_payment:        +piPmt.toFixed(2),
+    start_payment:     +startPmt.toFixed(2),
+    post_pmi_payment:  +(piPmt + SWEEP.TAX_ESCROW_MO + SWEEP.INS_ESCROW_MO).toFixed(2),
+    pmi_dropoff_month: pmiDropoff || SWEEP.TERM,
+    payoff_month:      payoffMonth,
+    payoff_years:      +(payoffMonth / 12).toFixed(1),
+    total_interest:    +totalInterest.toFixed(2),
+    total_pmi:         +totalPMI.toFixed(2),
+    total_cost:        +(totalInterest + pointsDollar).toFixed(2),
+    points_dollar:     +pointsDollar.toFixed(2),
+    total_closing:     +totalClosing.toFixed(2),
+    prepaids:          +prepaids.toFixed(2),
+    funds_needed:      +fundsNeeded.toFixed(2),
+    down_dollar:       +downDollar.toFixed(2),
+  };
+}
+
+function sweepBuildRange(start, stop, step) {
+  const vals = [];
+  let v = start;
+  const eps = step * 0.0001;
+  while (v <= stop + eps) { vals.push(+v.toFixed(8)); v += step; }
+  return vals;
+}
+
+function sweepApplyFilters(row, filters) {
+  for (const f of filters) {
+    const val = row[f.field];
+    if (val === undefined) continue;
+    const n = parseFloat(f.value);
+    if (f.op === 'lt' && !(val <  n)) return false;
+    if (f.op === 'le' && !(val <= n)) return false;
+    if (f.op === 'gt' && !(val >  n)) return false;
+    if (f.op === 'ge' && !(val >= n)) return false;
+    if (f.op === 'eq' && !(val === n)) return false;
+    if (f.op === 'ne' && !(val !== n)) return false;
+  }
+  return true;
+}
+
+function uuid4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+function rowsToCSV(rows) {
+  if (!rows.length) return '';
+  const keys = Object.keys(rows[0]);
+  return [keys.join(','), ...rows.map(r => keys.map(k => r[k]).join(','))].join('\n');
+}
+
+// ── Sweep state ────────────────────────────────────────────────────────────
+let SW_RESULTS = [];
+let SW_FILENAME = '';
+
+// ── Filter management ──────────────────────────────────────────────────────
+const FILTER_FIELDS = [
+  'funds_needed','total_cost','total_interest','payoff_years','payoff_month',
+  'pmi_dropoff_month','start_payment','rate_pct','total_closing','total_pmi',
+  'points_dollar','down_dollar','loan_amount',
+];
+const FILTER_OPS = ['lt','le','gt','ge','eq','ne'];
+let SW_FILTERS = [
+  { field: 'funds_needed', op: 'lt', value: '60000' },
+  { field: 'payoff_month', op: 'lt', value: '360'   },
+];
+
+function renderFilters() {
+  const list = document.getElementById('sw-filter-list');
+  list.innerHTML = '';
+  SW_FILTERS.forEach((f, i) => {
+    const row = document.createElement('div');
+    row.className = 'filter-item';
+    row.innerHTML = `
+      <select class="fw-field">
+        ${FILTER_FIELDS.map(ff => `<option value="${ff}" ${ff===f.field?'selected':''}>${LABELS[ff]||ff}</option>`).join('')}
+      </select>
+      <select class="fw-op">
+        ${FILTER_OPS.map(op => `<option value="${op}" ${op===f.op?'selected':''}>${op}</option>`).join('')}
+      </select>
+      <input type="number" class="fw-val" value="${f.value}" step="any">
+      <button class="filter-remove-btn" data-idx="${i}">✕</button>
+    `;
+    row.querySelector('.fw-field').addEventListener('change', e => { SW_FILTERS[i].field = e.target.value; updateSweepPreview(); });
+    row.querySelector('.fw-op').addEventListener('change',    e => { SW_FILTERS[i].op    = e.target.value; updateSweepPreview(); });
+    row.querySelector('.fw-val').addEventListener('input',    e => { SW_FILTERS[i].value = e.target.value; updateSweepPreview(); });
+    row.querySelector('.filter-remove-btn').addEventListener('click', () => { SW_FILTERS.splice(i, 1); renderFilters(); updateSweepPreview(); });
+    list.appendChild(row);
+  });
+}
+
+document.getElementById('sw-add-filter').addEventListener('click', () => {
+  SW_FILTERS.push({ field: 'funds_needed', op: 'lt', value: '100000' });
+  renderFilters();
+  updateSweepPreview();
+});
+
+// ── Preview + summary ──────────────────────────────────────────────────────
+function getSweepInputs() {
+  return {
+    purchase:    parseFloat(document.getElementById('sw-purchase').value)      || 369900,
+    parRate:     parseFloat(document.getElementById('sw-par-rate').value) / 100 || 0.06573,
+    costPer1pct: parseFloat(document.getElementById('sw-cost-per-pct').value)  || 14000,
+    pmiLTV:      parseFloat(document.getElementById('sw-pmi-ltv').value) / 100  || 0.80,
+    pmiMonthly:  parseFloat(document.getElementById('sw-pmi-monthly').value)    || 102,
+    ptsStart:    parseFloat(document.getElementById('sw-pts-start').value)      || -1,
+    ptsStop:     parseFloat(document.getElementById('sw-pts-stop').value)       || 2,
+    ptsStep:     parseFloat(document.getElementById('sw-pts-step').value)       || 0.5,
+    downStart:   parseFloat(document.getElementById('sw-down-start').value)     || 5,
+    downStop:    parseFloat(document.getElementById('sw-down-stop').value)      || 25,
+    downStep:    parseFloat(document.getElementById('sw-down-step').value)      || 5,
+    tgtStart:    parseFloat(document.getElementById('sw-tgt-start').value)      || 0,
+    tgtStop:     parseFloat(document.getElementById('sw-tgt-stop').value)       || 3500,
+    tgtStep:     parseFloat(document.getElementById('sw-tgt-step').value)       || 500,
+  };
+}
+
+function syntaxHL(json) {
+  return json
+    .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+    .replace(/: "([^"]+)"/g, ': <span class="json-str">"$1"</span>')
+    .replace(/: (-?[\d.]+)/g, ': <span class="json-num">$1</span>')
+    .replace(/: (true|false)/g, ': <span class="json-bool">$1</span>');
+}
+
+function updateSweepPreview() {
+  const inp = getSweepInputs();
+  const ptsRange  = sweepBuildRange(inp.ptsStart, inp.ptsStop, inp.ptsStep);
+  const downRange = sweepBuildRange(inp.downStart, inp.downStop, inp.downStep);
+  const tgtRange  = sweepBuildRange(inp.tgtStart,  inp.tgtStop,  inp.tgtStep);
+  const total     = ptsRange.length * downRange.length * tgtRange.length;
+
+  const cfg = {
+    purchase_price: inp.purchase,
+    par_rate: +(inp.parRate * 100).toFixed(4) + '%',
+    cost_per_1pct_rate: inp.costPer1pct,
+    pmi_ltv_threshold: +(inp.pmiLTV * 100) + '%',
+    sweep: {
+      points_pct:     { start: inp.ptsStart + '% (÷100 → ' + (inp.ptsStart/100) + ')', stop: inp.ptsStop + '%', step: inp.ptsStep + '%' },
+      down_pct:       { start: inp.downStart, stop: inp.downStop, step: inp.downStep },
+      target_payment: { start: inp.tgtStart, stop: inp.tgtStop, step: inp.tgtStep },
+    },
+    filters: SW_FILTERS,
+  };
+
+  document.getElementById('sw-json-preview').innerHTML = syntaxHL(JSON.stringify(cfg, null, 2));
+  document.getElementById('sw-summary').innerHTML =
+    `Points: <b style="color:var(--text)">${ptsRange.length}</b> values &nbsp;·&nbsp; ` +
+    `Down: <b style="color:var(--text)">${downRange.length}</b> values &nbsp;·&nbsp; ` +
+    `Target: <b style="color:var(--text)">${tgtRange.length}</b> values<br>` +
+    `<b style="color:var(--gold)">${total.toLocaleString()}</b> total combinations to evaluate`;
+}
+
+// ── Run sweep ──────────────────────────────────────────────────────────────
+document.getElementById('sw-run-btn').addEventListener('click', async () => {
+  const inp    = getSweepInputs();
+  const cfg    = {
+    parRate:    inp.parRate,
+    costPer1pct: inp.costPer1pct,
+    pmiLTV:     inp.pmiLTV,
+    pmiMonthly: inp.pmiMonthly,
+  };
+
+  const ptsRange  = sweepBuildRange(inp.ptsStart, inp.ptsStop, inp.ptsStep);
+  const downRange = sweepBuildRange(inp.downStart / 100, inp.downStop / 100, inp.downStep / 100);
+  const tgtRange  = sweepBuildRange(inp.tgtStart, inp.tgtStop, inp.tgtStep);
+
+  const total = ptsRange.length * downRange.length * tgtRange.length;
+  const btn   = document.getElementById('sw-run-btn');
+  const status= document.getElementById('sw-status');
+  const progW = document.getElementById('sw-progress-wrap');
+  const progB = document.getElementById('sw-progress-bar');
+  const dlBtn = document.getElementById('sw-download-btn');
+  const ldBtn = document.getElementById('sw-load-btn');
+
+  btn.disabled = true;
+  dlBtn.classList.remove('visible');
+  ldBtn.classList.remove('visible');
+  progW.classList.add('visible');
+  progB.style.width = '0%';
+
+  SW_RESULTS = [];
+  let done = 0, passed = 0;
+
+  // Run in chunks to keep UI responsive
+  const CHUNK = 200;
+  const combos = [];
+  for (const pts of ptsRange)
+    for (const down of downRange)
+      for (const tgt of tgtRange)
+        combos.push([pts / 100, down, tgt]);
+
+  const processChunk = (start) => new Promise(resolve => {
+    setTimeout(() => {
+      const end = Math.min(start + CHUNK, combos.length);
+      for (let i = start; i < end; i++) {
+        const [pts, down, tgt] = combos[i];
+        const row = sweepAmortize(inp.purchase, down, pts, tgt, cfg);
+        if (sweepApplyFilters(row, SW_FILTERS)) { SW_RESULTS.push(row); passed++; }
+        done++;
+      }
+      const pct = Math.round(done / total * 100);
+      progB.style.width = pct + '%';
+      status.className = 'run-status running';
+      status.textContent = `Running… ${done.toLocaleString()} / ${total.toLocaleString()} (${passed} passed filters)`;
+      resolve();
+    }, 0);
+  });
+
+  for (let i = 0; i < combos.length; i += CHUNK) {
+    await processChunk(i);
+  }
+
+  // Done
+  btn.disabled = false;
+  progW.classList.remove('visible');
+
+  if (!SW_RESULTS.length) {
+    status.className = 'run-status error';
+    status.textContent = `⚠ ${total.toLocaleString()} combinations run — 0 passed filters. Try loosening filters.`;
+    return;
+  }
+
+  const price = inp.purchase.toLocaleString('en-US', {maximumFractionDigits:0}).replace(/,/g,'');
+  SW_FILENAME = `sweep_${price}_${uuid4().slice(0,8)}.csv`;
+
+  status.className = 'run-status done';
+  status.textContent = `✓ Done — ${done.toLocaleString()} combinations, ${SW_RESULTS.length.toLocaleString()} passed filters → ${SW_FILENAME}`;
+  dlBtn.classList.add('visible');
+  ldBtn.classList.add('visible');
+});
+
+// ── Download CSV ───────────────────────────────────────────────────────────
+document.getElementById('sw-download-btn').addEventListener('click', () => {
+  if (!SW_RESULTS.length) return;
+  const csv  = rowsToCSV(SW_RESULTS);
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = SW_FILENAME; a.click();
+  URL.revokeObjectURL(url);
+});
+
+// ── Load into analysis ─────────────────────────────────────────────────────
+document.getElementById('sw-load-btn').addEventListener('click', () => {
+  if (!SW_RESULTS.length) return;
+  if (STATE.files.find(f => f.name === SW_FILENAME)) return;
+  const idx = STATE.files.length;
+  STATE.files.push({ name: SW_FILENAME, rows: SW_RESULTS, color: FILE_COLORS_HEX[idx % FILE_COLORS_HEX.length] });
+  renderFileList();
+  applyFilters();
+  updateHeaderStats();
+  // Switch to analysis tab
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector('[data-tab="analysis"]').classList.add('active');
+  document.getElementById('tab-analysis').classList.add('active');
+});
+
+// ── Wire up sweep input changes ────────────────────────────────────────────
+['sw-purchase','sw-par-rate','sw-cost-per-pct','sw-pmi-ltv','sw-pmi-monthly',
+ 'sw-pts-start','sw-pts-stop','sw-pts-step',
+ 'sw-down-start','sw-down-stop','sw-down-step',
+ 'sw-tgt-start','sw-tgt-stop','sw-tgt-step'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updateSweepPreview);
+});
+
+// Init
+renderFilters();
+updateSweepPreview();
+
+// Chart.js defaults
+Chart.defaults.color = '#6b7080';
+Chart.defaults.borderColor = 'rgba(36,40,56,0.8)';
+
+</script>
+</body>
+</html>
